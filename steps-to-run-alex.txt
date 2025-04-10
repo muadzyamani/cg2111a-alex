@@ -1,0 +1,15 @@
+Steps to run alex. 
+
+// whichever ip address
+ssh pi@192.168.3.114
+ssh pi@192.168.251.114
+pw=raspberry
+
+cd slam\ studio/alex/alex/
+
+// to enter (env)
+source ./env/bin/activate
+
+cd 'labs/SlamLab'
+
+python alex_main.py
