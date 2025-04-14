@@ -2,16 +2,18 @@
 # Currently does not do anything else with the messages.
 
 # Import Python Native Modules. We require the Barrier class from threading to synchronize the start of multiple threads.
+import ctypes
 from threading import Barrier
 
 # Import the required pubsub modules. PubSubMsg class to extract the payload from a message.
+
 from pubsub.pub_sub_manager import ManagedPubSubRunnable, PubSubMsg
 from pubsub.pub_sub_manager import publish, subscribe, unsubscribe, getMessages, getCurrentExecutionContext  
 
 # Import the required arduino communication modules. Replace or add to the handlers as needed.
 from control.alex_control import receivePacket
 from control.alex_control_constants import  TPacket, TPacketType, PAYLOAD_PARAMS_COUNT, PAYLOAD_PACKET_SIZE
-from control.alex_control_constants import  TResponseType, TResultType
+from control.alex_control_constants import  TResponseType, TResultType, COMMS_BUFFER_SIZE, COMMS_MAGIC_NUMBER, COMMS_PACKET_SIZE, PAYLOAD_DATA_MAX_STR_LEN, TComms
 
 
 # Constants
@@ -69,6 +71,8 @@ def receiveThread(setupBarrier:Barrier=None, readyBarrier:Barrier=None):
                 handleErrorResponse(packet, publishPackets = PUBLISH_PACKETS)
             elif packetType == TPacketType.PACKET_TYPE_MESSAGE:
                 handleMessage(packet, publishPackets = PUBLISH_PACKETS)
+            elif packetType == TPacketType.PACKET_TYPE_NEWLINE:
+                handleNewline(packet, publishPackets = PUBLISH_PACKETS)
             else:
                 print(f"Unknown Packet Type {packetType}")
     except KeyboardInterrupt:
@@ -124,34 +128,117 @@ def handleResponse(res: TPacket, publishPackets:bool=False):
     else:
         print(f"Arduino sent unknown response type {res_type}")
 
-def handleErrorResponse(res: TPacket , publishPackets:bool=False):
-    """
-    Handles error responses from the Arduino.
+def reset_comms_packet(comms_packet: TComms):
+    """Completely resets a TComms packet structure"""
+    try:
+        # Reset header fields
+        comms_packet.magic = 0
+        comms_packet.dataSize = 0
+        comms_packet.checksum = 0
+        
+        # Clear the buffer
+        ctypes.memset(ctypes.addressof(comms_packet.buffer), 0, COMMS_BUFFER_SIZE)
+        
+        # Reset padding
+        comms_packet.dummy = b'\x00\x00\x00'
+        return True
+    except Exception as e:
+        print(f"Comms reset failed: {str(e)}")
+        return False
 
-    This function takes a TPacket object, determines the type of error response
-    from the Arduino, and prints an appropriate error message.
+def reset_tpacket(tpacket: TPacket):
+    """Completely resets a TPacket structure"""
+    try:
+        # Numeric fields
+        tpacket.packetType = 0
+        tpacket.command = 0
+        
+        # Data buffer
+        ctypes.memset(ctypes.addressof(tpacket.data), 0, PAYLOAD_DATA_MAX_STR_LEN)
+        
+        # Parameters array
+        zero_params = (ctypes.c_uint32 * PAYLOAD_PARAMS_COUNT)()
+        ctypes.memmove(
+            ctypes.addressof(tpacket.params),
+            ctypes.addressof(zero_params),
+            ctypes.sizeof(zero_params)
+        )
+        
+        # Dummy padding
+        tpacket.dummy = b'\x00\x00'
+        return True
+    except Exception as e:
+        print(f"TPacket reset failed: {str(e)}")
+        return False
 
-    Args:
-        res (TPacket): The packet received from the Arduino containing the error response.
-
-    Raises:
-        ValueError: If the response type is unknown.
-    """
-    res_type = TResponseType(res.command)
-    if res_type == TResponseType.RESP_BAD_PACKET:
-        print("Arduino received bad magic number")
-    elif res_type == TResponseType.RESP_BAD_CHECKSUM:
-        print("Arduino received bad checksum")
-    elif res_type == TResponseType.RESP_BAD_COMMAND:
-        print("Arduino received bad command")
-    elif res_type == TResponseType.RESP_BAD_RESPONSE:
-        print("Arduino received unexpected response")
-    else:
-        print(f"Arduino reports unknown error type {res_type}")
-
-    if publishPackets:
-        publish("arduino/recv", (res.packetType, res.command ))
-
+def handleErrorResponse(comms_packet: TComms, publishPackets: bool = False):
+    """Handles error responses with proper packet resetting"""
+    tpacket = None  # Initialize to None
+    
+    try:
+        # First verify we have a valid comms packet
+        if comms_packet.magic != COMMS_MAGIC_NUMBER:
+            print("Error: Bad magic number in comms packet")
+            reset_comms_packet(comms_packet)
+            return
+            
+        # Extract TPacket from buffer
+        try:
+            tpacket = ctypes.cast(
+                ctypes.addressof(comms_packet.buffer),
+                ctypes.POINTER(TPacket)
+            ).contents
+        except Exception as e:
+            print(f"Error: Failed to extract TPacket from buffer: {str(e)}")
+            reset_comms_packet(comms_packet)
+            return
+            
+        # Process error type
+        try:
+            error_msgs = {
+                TResponseType.RESP_BAD_PACKET: "Bad packet structure",
+                TResponseType.RESP_BAD_CHECKSUM: "Bad checksum", 
+                TResponseType.RESP_BAD_COMMAND: "Bad command",
+                TResponseType.RESP_BAD_RESPONSE: "Unexpected response"
+            }
+            msg = error_msgs.get(TResponseType(tpacket.command), "Unknown error")
+            print(f"Arduino Error: {msg}")
+            
+            if publishPackets:
+                publish("arduino/recv", (tpacket.packetType, tpacket.command))
+                
+        except ValueError as e:
+            print(f"Error: Invalid response type: {str(e)}")
+            
+    except Exception as e:
+        print(f"Error handling failed: {str(e)}")
+        
+    finally:
+        # Always reset both packets if they exist
+        try:
+            if tpacket is not None:
+                if not reset_tpacket(tpacket):
+                    print("Warning: TPacket reset failed, recreating")
+                    new_tpacket = TPacket()
+                    ctypes.memmove(
+                        ctypes.addressof(tpacket),
+                        ctypes.addressof(new_tpacket),
+                        PAYLOAD_PACKET_SIZE
+                    )
+        except Exception as e:
+            print(f"TPacket reset error: {str(e)}")
+            
+        try:
+            if not reset_comms_packet(comms_packet):
+                print("Warning: Comms packet reset failed, recreating")
+                new_comms = TComms()
+                ctypes.memmove(
+                    ctypes.addressof(comms_packet),
+                    ctypes.addressof(new_comms),
+                    COMMS_PACKET_SIZE
+                )
+        except Exception as e:
+            print(f"Comms packet reset error: {str(e)}")
 def handleMessage(res:TPacket, publishPackets:bool=False):
     """
     Handles the incoming message from an Arduino device.
@@ -163,8 +250,10 @@ def handleMessage(res:TPacket, publishPackets:bool=False):
         None
     """
     message = str(res.data, 'utf-8')
-    print(f"Arduino says: {message}")
+    print(f"{message}", end="")
     if publishPackets:
         publish("arduino/recv", (res.packetType, res.command, message))
     pass
 
+def handleNewline(res:TPacket, publishPackets:bool=False):
+    print("")

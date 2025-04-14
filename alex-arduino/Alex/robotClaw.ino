@@ -29,11 +29,6 @@
 //right 800 - 1700 
 //left 2600 - 1700
 
-volatile uint16_t startTime = 0;
-volatile uint16_t endTime = 0;
-volatile bool risingEdge = true;
-volatile bool distanceReady = false;
-
 //void setup() {
 //    setUpServo();
 //    setUpUltrasonic();
@@ -88,94 +83,65 @@ volatile bool distanceReady = false;
     RIGHT_SERVO_OCR = MAX_PULSE;
 
 
-    DISPENSER_SERVO_OCR = 600;
+    DISPENSER_SERVO_OCR = 2500;
 }
 
-void setUpUltrasonic(){
-    // Setup TRIG pin (D48) as output
-    TRIG_DDR |= (1 << TRIG_PIN);
-    TRIG_PORT &= ~(1 << TRIG_PIN);
-
-    // Setup ECHO pin (D49 / ICP4) as input
-    ECHO_DDR &= ~(1 << ECHO_PIN);
-
-    // Timer4 - Input Capture Mode
-    TCCR4A = 0; // Normal mode
-    TCCR4B = (1 << ICES4) | (1 << CS41); // Rising edge, prescaler = 8
-    TIMSK4 = (1 << ICIE4); // Enable Input Capture interrupt
-}
-
-float getDistance() {
-  // Reset state
-  distanceReady = false;
-  risingEdge = true;
-  TCCR4B |= (1 << ICES4); // Set to detect rising edge
-
-  // Trigger 10µs pulse on TRIG (D8)
-  TRIG_PORT &= ~(1 << TRIG_PIN);
-  _delay_us(2);
-  TRIG_PORT |= (1 << TRIG_PIN);
-  _delay_us(10);
-  TRIG_PORT &= ~(1 << TRIG_PIN);
-
-  // Wait for echo to be processed in ISR
-  while (!distanceReady);
-
-  uint16_t pulseTicks = endTime - startTime;
-  float distance_cm = pulseTicks * 0.008575; // 0.5µs tick → cm
-  return distance_cm;
-}
-
-// ISR for Timer4 Input Capture
-ISR(TIMER4_CAPT_vect) {
-  if (risingEdge) {
-    startTime = ICR4;
-    TCCR4B &= ~(1 << ICES4); // Switch to falling edge
-    risingEdge = false;
+void smoothMove(volatile uint16_t &ocr, uint16_t target, uint8_t step, uint16_t delayTime) {
+  if (ocr < target) {
+    for (uint16_t val = ocr; val <= target; val += step) {
+      ocr = val;
+      delay(delayTime);
+    }
   } else {
-    endTime = ICR4;
-    distanceReady = true;
-    TCCR4B |= (1 << ICES4); // Switch back to rising edge
-    risingEdge = true;
+    for (uint16_t val = ocr; val >= target; val -= step) {
+      ocr = val;
+      delay(delayTime);
+      if (val < step) break; // avoid underflow
+    }
   }
 }
 
 // 0 - 90 degree
 void closeClaw(){
-    for (int pulse = MAX_PULSE; pulse >= MIN_PULSE; pulse -= PULSE_STEP) {
-        //left
-        LEFT_SERVO_OCR = pulse;
-        //right
-        RIGHT_SERVO_OCR = (MAX_PULSE - pulse) + MIN_PULSE;
-        delay(200);
-    }
+//    for (int pulse = MAX_PULSE; pulse >= MIN_PULSE; pulse -= PULSE_STEP) {
+//        //left
+//        LEFT_SERVO_OCR = pulse;
+//        //right
+//        RIGHT_SERVO_OCR = (MAX_PULSE - pulse) + MIN_PULSE;
+//        delay(200);
+//    }
+    smoothMove(LEFT_SERVO_OCR, MIN_PULSE, 10, 5); // Mid
+    smoothMove(RIGHT_SERVO_OCR, MAX_PULSE, 10, 5);
+
 }
 
 void openClaw(){
-    for (int pulse = MIN_PULSE; pulse <= MAX_PULSE; pulse += PULSE_STEP) {
-      //left
-      LEFT_SERVO_OCR = pulse;
-      //right
-      RIGHT_SERVO_OCR = (MAX_PULSE - pulse) + MIN_PULSE;
-      delay(200);
-    }
+//    for (int pulse = MIN_PULSE; pulse <= MAX_PULSE; pulse += PULSE_STEP) {
+//      //left
+//      LEFT_SERVO_OCR = pulse;
+//      //right
+//      RIGHT_SERVO_OCR = (MAX_PULSE - pulse) + MIN_PULSE;
+//      delay(200);
+//    }
+    LEFT_SERVO_OCR = MAX_PULSE;
+    RIGHT_SERVO_OCR = MIN_PULSE;
 }
 
 void dispensing(){
-    for (int pulse = 600; pulse <= 2500; pulse += PULSE_STEP) {
-        DISPENSER_SERVO_OCR = pulse;
-        delay(300);
-    }
-    //DISPENSER_SERVO_OCR = 2500;
+//    for (int pulse = 600; pulse <= 2500; pulse += PULSE_STEP) {
+//        DISPENSER_SERVO_OCR = pulse;
+//        delay(300);
+//    }
+    DISPENSER_SERVO_OCR = 600;
 
 }
   
   
 void stop_dispensing(){
-    for (int pulse = 2500; pulse >= 600; pulse -= PULSE_STEP) {
-      DISPENSER_SERVO_OCR = pulse;
-      delay(300);
-  }
-    //DISPENSER_SERVO_OCR = 600;
+//    for (int pulse = 2500; pulse >= 600; pulse -= PULSE_STEP) {
+//      DISPENSER_SERVO_OCR = pulse;
+//      delay(300);
+//  }
+    DISPENSER_SERVO_OCR = 2500;
 
 }

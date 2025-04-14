@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV='/home/pi/slam studio/alex/alex/env'
+VIRTUAL_ENV=/home/pi/slam-studio-backup/env
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

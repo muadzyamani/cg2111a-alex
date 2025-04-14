@@ -218,6 +218,10 @@ def parseUserInput(input_str:str, exitFlag:Event = _EXIT_EVENT):
         commandType = TCommandType.COMMAND_COLOR_SENSOR
         params = parseParams(split_input[1:], 0, None)
         return  (packetType, commandType,  params)
+    elif command == "u":
+        commandType = TCommandType.COMMAND_ULTRASONIC_SENSOR
+        params = parseParams(split_input[1:], 0, None)
+        return  (packetType, commandType, params)
     elif command == "1":
         commandType = TCommandType.COMMAND_OPEN_CLAW
         params = parseParams(split_input[1:], 0, None)

@@ -20,6 +20,7 @@ class TPacketType(enum.Enum):
     PACKET_TYPE_ERROR = 2
     PACKET_TYPE_MESSAGE = 3
     PACKET_TYPE_HELLO = 4
+    PACKET_TYPE_NEWLINE = 5
 
 class TResponseType(enum.Enum):
     """
@@ -34,7 +35,7 @@ class TResponseType(enum.Enum):
         RESP_BAD_RESPONSE (int): Indicates a response with a bad response.
     """
     RESP_OK = 0
-    RESP_STATUS=1
+    RESP_STATUS = 1
     RESP_BAD_PACKET = 2
     RESP_BAD_CHECKSUM = 3
     RESP_BAD_COMMAND = 4
@@ -67,6 +68,7 @@ class TCommandType(enum.Enum):
     COMMAND_CLOSE_DISPENSER = 11
     COMMAND_SET_TURNINGTIME = 12
     COMMAND_SET_MOVINGTIME = 13
+    COMMAND_ULTRASONIC_SENSOR = 14
 
 class TResultType(enum.Enum):
     """
@@ -117,6 +119,17 @@ class TPacket(ctypes.Structure):
         ("data", ctypes.c_char*PAYLOAD_DATA_MAX_STR_LEN),
         ("params", ctypes.c_uint32*PAYLOAD_PARAMS_COUNT),
     ]
+    def reset(self):
+        """Reset all packet fields to zero/default values"""
+        self.packetType = 0
+        self.command = 0
+        self.dummy = b'\x00\x00'  # Reset both dummy bytes
+        # Clear data buffer
+        ctypes.memset(ctypes.addressof(self.data), 0, PAYLOAD_DATA_MAX_STR_LEN)
+        # Reset all parameters
+        for i in range(PAYLOAD_PARAMS_COUNT):
+            self.params[i] = 0
+
 PAYLOAD_PACKET_SIZE = ctypes.sizeof(TPacket)
 
 

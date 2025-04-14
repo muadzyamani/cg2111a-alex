@@ -14,7 +14,8 @@ typedef enum
   PACKET_TYPE_RESPONSE = 1,
   PACKET_TYPE_ERROR = 2,
   PACKET_TYPE_MESSAGE = 3,
-  PACKET_TYPE_HELLO = 4
+  PACKET_TYPE_HELLO = 4,
+  PACKET_TYPE_NEWLINE = 5
 } TPacketType;
 
 // Response types. This goes into the command field
@@ -47,7 +48,8 @@ typedef enum
   COMMAND_OPEN_DISPENSER = 10,
   COMMAND_CLOSE_DISPENSER = 11,
   COMMAND_SET_TURNINGTIME = 12,
-  COMMAND_SET_MOVINGTIME = 13
+  COMMAND_SET_MOVINGTIME = 13,
+  COMMAND_ULTRASONIC_SENSOR = 14
 } TCommandType;
 
 typedef enum 

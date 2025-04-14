@@ -39,6 +39,18 @@ Main Function:
 - main(): Initializes serial communication (if enabled), synchronizes threads and processes using barriers, sets up each component (Arduino, Lidar, SLAM, TLS Relay, UI, and Debug Monitor), handles the Arduino handshake, and gracefully starts and joins all threads and processes.
 """
 
+import sys
+sys.path.append('/home/pi/slam-studio-backup/libraries/epp2/control')
+sys.path.append('/home/pi/slam-studio-backup/libraries/epp2/control/control')
+sys.path.append('/home/pi/slam-studio-backup/libraries/epp2/pubsub')
+sys.path.append('/home/pi/slam-studio-backup/libraries/epp2/lidar')
+sys.path.append('/home/pi/slam-studio-backup/libraries/epp2/display')
+sys.path.append('/home/pi/slam-studio-backup/libraries/epp2/networking')
+sys.path.append('/home/pi/slam-studio-backup/libraries/epp2/slam')
+sys.path.append('/home/pi/slam-studio-backup/libraries/external/pyrplidar')
+sys.path.append('/home/pi/slam-studio-backup/libraries/external/BreezySLAM/python')
+
+
 import time,sys
 from threading import Barrier
 from multiprocessing import Barrier as mBarrier
@@ -66,7 +78,7 @@ FAILED_ATTEMPT_WAIT_SEC = 5
 
 
 # NODE FLAGS
-ENABLE_DEBUG_MESSAGE_MONITOR = False 
+ENABLE_DEBUG_MESSAGE_MONITOR = False
 ENABLE_LIDAR_NODE = True
 ENABLE_SLAM_NODE = True
 ENABLE_GUI_NODE = True
@@ -134,7 +146,7 @@ def main():
             print ("Failed to open serial port. Exiting...")
             return
         print("Serial OK")
-        
+
         # Wait for arduino to reset
         print("WAITING TWO SECONDS FOR ARDUINO TO REBOOT.", end="", flush=True)
         # make sure to flush the print buffer before sleeping
@@ -148,7 +160,7 @@ def main():
     # Establish Threads Signatures
     with PubSubManager() as mgr:
         # Establishing Barriers for Threads and Processes
-        ## Barriers are flow control primitives that allow multiple threads/processes to wait until all parties have reached a certain point of execution before any can proceed. 
+        ## Barriers are flow control primitives that allow multiple threads/processes to wait until all parties have reached a certain point of execution before any can proceed.
         # This is important for synchronization and ensuring that all components are ready before starting the main workflow.
         ## Barrier(2) -> 2 parties (i.e., main thread and 1 sub-thread) must call wait() before any can proceed
         # The barrier will only allow all waiting parties to proceed once the specified number of parties have called wait()
@@ -209,57 +221,57 @@ def main():
             # Adding Monitor Thread
             mgr.add_thread(target=monitorThread,
                     name="Monitor Thread",
-                    kwargs={"setupBarrier": setupBarrier_monitor_t, 
-                            "readyBarrier": readyBarrier_monitor_t, 
+                    kwargs={"setupBarrier": setupBarrier_monitor_t,
+                            "readyBarrier": readyBarrier_monitor_t,
                             "topicsToMonitor": DEBUG_MONITOR_TOPICS})
 
 
         if ENABLE_ARDUNIO_INTERFACE:
             # Adding Arduino Threads
-            mgr.add_thread(target=sendThread, 
+            mgr.add_thread(target=sendThread,
                     name="Arduino Send Thread",
                     kwargs={"setupBarrier": setupBarrier_arduino_t, "readyBarrier": readyBarrier_arduino_t})
-            mgr.add_thread(target=receiveThread, 
+            mgr.add_thread(target=receiveThread,
                     name="Arduino Receive Thread",
                     kwargs={"setupBarrier": setupBarrier_arduino_t, "readyBarrier": readyBarrier_arduino_t})
-            
+
         if ENABLE_LIDAR_NODE:
             # Adding Lidar Thread
-            mgr.add_thread(target=lidarScanThread, 
+            mgr.add_thread(target=lidarScanThread,
                     name="Lidar Scan Thread",
                     kwargs={"setupBarrier": setupBarrier_lidar_t, "readyBarrier": readyBarrier_lidar_t})
-            
+
         if ENABLE_SLAM_NODE:
             # Adding SLAM Thread
-            mgr.add_thread(target=slamThread, 
+            mgr.add_thread(target=slamThread,
                     name="SLAM Thread",
                     kwargs={"setupBarrier": setupBarrier_slam_t, "readyBarrier": readyBarrier_slam_t})
-        
+
         if ENABLE_CLI_NODE:
             # Adding CLI Threads
-            mgr.add_thread(target=cliThread, 
+            mgr.add_thread(target=cliThread,
                     name="CLI Thread",
                     kwargs={"setupBarrier": setupBarrier_ui_t, "readyBarrier": readyBarrier_ui_t})
-        
+
         if ENABLE_GUI_NODE:
             # Adding GUI Process
-            mgr.add_process(target=lidarDisplayProcess, 
+            mgr.add_process(target=lidarDisplayProcess,
                     name="Lidar Display Process",
                     kwargs={"setupBarrier": setupBarrier_ui_m, "readyBarrier": readyBarrier_ui_m})
 
         # Adding TLS Relay Threads
         if ENABLE_TLS_SERVER:
-            mgr.add_thread(target=TLSRecvThread, 
+            mgr.add_thread(target=TLSRecvThread,
                    name="TLS Relay Receive Thread",
                    kwargs={"setupBarrier": setupBarrierNetworkTLS_t, "readyBarrier": readyBarrierNetworkTLS_t})
-            mgr.add_thread(target=TLSSendThread, 
+            mgr.add_thread(target=TLSSendThread,
                    name="TLS Relay Send Thread",
                    kwargs={"setupBarrier": setupBarrierNetworkTLS_t, "readyBarrier": readyBarrierNetworkTLS_t})
-            
 
 
 
-        # Start all threads. 
+
+        # Start all threads.
         # It is important that your threads do not print anything until all processes have been spawned (due to contention for stdout)
         mgr.start_all()
 
@@ -273,10 +285,10 @@ def main():
             print("\n============ ARDUINO HANDSHAKE ============")
             # Sending hello to arduino
             print("Establishing Connection with Arduino. Sending Hello...")
-            
-            # wait for hello responses 
+
+            # wait for hello responses
             waitForHelloRoutine() # this routine does not use the send thread, instead it sends directly to the serial port
-            
+
             print('\n============ ARDUINO SETUP ============')
             setupBarrier_arduino_t.wait()
             readyBarrier_arduino_t.wait()

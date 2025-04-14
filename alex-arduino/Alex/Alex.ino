@@ -29,24 +29,6 @@ TResult readPacket(TPacket *packet)
       return deserialize(buffer, len, packet);
 }
 
-void sendColour()
-{
-  // Implement code to send back a packet containing key
-  // information like leftForwardTicks, rightForwardTicks, leftRevs, rightRevs
-  // forwardDist and reverseDist
-  // Use the params array to store this information, and set the
-  // packetType and command files accordingly, then use sendResponse
-  // to send out the packet. See sendMessage on how to use sendResponse.
-  TPacket statusPacket;
-  statusPacket.packetType = PACKET_TYPE_RESPONSE;
-  statusPacket.command = RESP_STATUS;
-
-// statusPacket.params[0] = (unsigned long)(read_colour());
-  statusPacket.params[0] = 1;
-  
-  sendResponse(&statusPacket);
-}
-
 void sendMessage(const char *message)
 {
   // Sends text messages back to the Pi. Useful
@@ -55,6 +37,17 @@ void sendMessage(const char *message)
   TPacket messagePacket;
   messagePacket.packetType = PACKET_TYPE_MESSAGE;
   strncpy(messagePacket.data, message, MAX_STR_LEN);
+  sendResponse(&messagePacket);
+}
+
+void sendNewline()
+{
+  const char *empty = "";
+  TPacket messagePacket;
+  messagePacket.packetType = PACKET_TYPE_NEWLINE;
+  strncpy(messagePacket.data, empty, MAX_STR_LEN);
+
+
   sendResponse(&messagePacket);
 }
 
@@ -195,6 +188,8 @@ int readSerial(char *buffer)
 void writeSerial(const char *buffer, int len)
 {
   Serial.write(buffer, len);
+  // Serial.flush();
+
   // Change Serial to Serial2/Serial3/Serial4 in later labs when using other UARTs
 }
 
@@ -237,29 +232,37 @@ void handleCommand(TPacket *command)
       break;
     case COMMAND_COLOUR_SENSOR:
         sendOK();
-        // Implement sensor reading if ready
-        // sendColour();
+        sendColour();
       break;
     case COMMAND_NUDGE_LEFT:  // *** ADD THIS CASE ***
         sendOK();
         //nudge_turn_left();    // Call the timed function from robotlib
-        break;
+      break;
     case COMMAND_NUDGE_RIGHT: // *** ADD THIS CASE ***
         sendOK();
         //nudge_turn_right();   // Call the timed function from robotlib
-        break;
+      break;
     case COMMAND_OPEN_DISPENSER:
         sendOK();
         dispensing();
+      break;
     case COMMAND_CLOSE_DISPENSER:
         sendOK();
         stop_dispensing();
+      break;
     case COMMAND_SET_TURNINGTIME:
         sendOK();
         setTurningTime(command->params[0]);
+      break;
     case COMMAND_SET_MOVINGTIME:
         sendOK();
         setMovingTime(command->params[0]);
+      break;
+    case COMMAND_ULTRASONIC_SENSOR:
+        sendOK();
+        setUpUltrasonic();
+        getDistance();
+      break;
     default:
       sendBadCommand();
   }
@@ -335,6 +338,9 @@ void handlePacket(TPacket *packet)
       break;
   }
 }
+void resetPacket(TPacket *packet) {
+  memset(packet, 0, sizeof(TPacket));
+}
 
 void loop() {
 // Uncomment the code below for Step 2 of Activity 3 in Week 8 Studio 2
@@ -355,9 +361,11 @@ if(result == PACKET_OK)
 else if(result == PACKET_BAD)
   {
     sendBadPacket();
+    resetPacket(&recvPacket);
   }
 else if(result == PACKET_CHECKSUM_BAD)
   {
     sendBadChecksum();
+    resetPacket(&recvPacket);
   }  
 }

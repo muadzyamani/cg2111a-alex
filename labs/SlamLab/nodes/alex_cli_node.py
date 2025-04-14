@@ -3,6 +3,7 @@
 # Import Python Native Modules. We require the Barrier class from threading to synchronize the start of multiple threads.
 from threading import Barrier
 import signal
+import time
 
 # Import the required pubsub modules. PubSubMsg class to extract the payload from a message.
 from pubsub.pub_sub_manager import ManagedPubSubRunnable, PubSubMsg
@@ -15,60 +16,46 @@ from control.alex_control import parseUserInput
 ARDUINO_SEND_TOPIC = "arduino/send"
 
 def cliThread(setupBarrier:Barrier=None, readyBarrier:Barrier=None):
-    """
-    Starts a command thread that interacts with the user. Publishes commands to the "arduino/send" topic for the send thread to handle sending the commands to the Arduino.
+    ctx = getCurrentExecutionContext()
     
-    Args:
-        setupBarrier (Barrier, optional): A threading barrier to synchronize initial setup steps. Defaults to None.
-        readyBarrier (Barrier, optional): A threading barrier to synchronize the start of the thread. Defaults to None.
-    
-    The function performs the following steps:
-    1. Sets up the execution context.
-    2. Waits for setup to complete if barriers are provided.
-    3. Initiates a user interaction loop to receive and parse commands.
-    4. Exits gracefully when an exit condition is met.
-
-    Note:
-        input is a blocking call, so the thread will wait for user input before proceeding. This means that even if the exit condition is met while waiting for input, the thread remains blocked until input is received (i.e., the user enters a command).
-
-    """
-
-    # Perform any setup here
-    pass
-    ctx:ManagedPubSubRunnable = getCurrentExecutionContext()
-
-    # Perform any setup here
-    setupBarrier.wait() if readyBarrier != None else None
-
-    print(f"CLI Thread Ready. Publishing to {ARDUINO_SEND_TOPIC}")
-
-    # Wait for all Threads ready
-    readyBarrier.wait() if readyBarrier != None else None
-
-    # User Interaction Loop
     try:
-        while(not ctx.isExit()):
-            input_str = input("Command (f=forward, b=reverse, l=turn left, r=turn right, s=stop, c=clear stats, g=get stats q=exit)\n")
+        # Setup synchronization
+        if setupBarrier: setupBarrier.wait()
+        print(f"CLI Thread Ready. Publishing to {ARDUINO_SEND_TOPIC}")
+        if readyBarrier: readyBarrier.wait()
+
+        while not ctx.isExit():
+            # Get user input
+            input_str = input("Commands (9:move time, 0:turn, 1:open, 2:close, k:dispense, l:retract, q:quit)\n")
+            
+            # Parse command
             parseResult = parseUserInput(input_str, exitFlag=ctx.exitEvent)
-            # if the parse result is None then the user entered an invalid command
-            if parseResult == None:
-                # print("Invalid command. Please try again.")
+            if not parseResult:
+                print("Invalid command")
                 continue
-            else:
-                # if the parse result is not None then the user entered a valid command
-                # and the command has been published to the "arduino/send" topic
-                publish(ARDUINO_SEND_TOPIC, tuple(parseResult))
-
-            # [Optional: Consider enforcing the user to wait for the arduino to respond before sending the next command]
-        pass
-
-    except KeyboardInterrupt:
-        pass
+            
+            # Send command and wait for ACK
+            publish(ARDUINO_SEND_TOPIC, tuple(parseResult))
+            print(f"Sent: {parseResult[1].name}", end='', flush=True)
+            
+            # Wait for Arduino response
+            ack_received = False
+            start_time = time.time()
+            while not ack_received and not ctx.isExit():
+                # Check for response with timeout
+                response = getMessages("arduino/response", timeout=0.1)
+                if response:
+                    print(f" | Arduino ACK: {response[-1][1].name}")
+                    ack_received = True
+                elif time.time() - start_time > 1:  #  1 sec timeout
+                    print(" | Timed out waiting for response!")
+                    break
+                
+                # Visual waiting indicator
+                print(".", end='', flush=True)
+            
     except Exception as e:
         print(f"CLI Thread Exception: {e}")
-        pass
-    
-    # Shutdown and exit the thread gracefully
-    ctx.doExit()
-    print("Exiting Command Thread")
-    pass
+    finally:
+        ctx.doExit()
+        print("Exiting Command Thread")
