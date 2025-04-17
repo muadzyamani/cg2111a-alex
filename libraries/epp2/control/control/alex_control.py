@@ -238,14 +238,6 @@ def parseUserInput(input_str:str, exitFlag:Event = _EXIT_EVENT):
         commandType = TCommandType.COMMAND_CLOSE_DISPENSER
         params = parseParams(split_input[1:], 0, None)
         return  (packetType, commandType,  params)
-    elif command == ",":
-        commandType = TCommandType.COMMAND_NUDGE_LEFT
-        params = parseParams(split_input[1:], 0, None)
-        return  (packetType, commandType,  params)
-    elif command == ".":
-        commandType = TCommandType.COMMAND_NUDGE_RIGHT
-        params = parseParams(split_input[1:], 0, None)
-        return  (packetType, commandType,  params)
     elif command == "0":
         commandType = TCommandType.COMMAND_SET_TURNINGTIME
         params = parseParams(split_input[1:], 1, "Enter new turning time.\n")

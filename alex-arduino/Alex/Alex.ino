@@ -234,14 +234,6 @@ void handleCommand(TPacket *command)
         sendOK();
         sendColour();
       break;
-    case COMMAND_NUDGE_LEFT:  // *** ADD THIS CASE ***
-        sendOK();
-        //nudge_turn_left();    // Call the timed function from robotlib
-      break;
-    case COMMAND_NUDGE_RIGHT: // *** ADD THIS CASE ***
-        sendOK();
-        //nudge_turn_right();   // Call the timed function from robotlib
-      break;
     case COMMAND_OPEN_DISPENSER:
         sendOK();
         dispensing();
